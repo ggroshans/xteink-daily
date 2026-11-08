@@ -164,3 +164,4 @@ Tests: `python3 -m unittest discover -s tests -t .` (includes a fake CrossPoint 
 - **Plugin does nothing:** plugins must be enabled and the reader restarted after install. The
   reader's clock must have been set once (its first Wi-Fi join does this). Battery must be ≥ 20%.
 # xteink-daily
+# xteink-daily
