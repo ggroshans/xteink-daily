@@ -1,0 +1,97 @@
+{
+  "_comment": "Keys starting with _ are comments. Paths are relative to this file.",
+  "library_dir": "library",
+  "build_time": "05:30",
+  "_contact": "Optional URL or email added to the User-Agent; Wikipedia and some APIs throttle requests without one.",
+  "contact": "",
+  "_plugins": "Content packs: list modules under plugins (and their folder under plugin_paths unless pip-installed). See `xteink-daily sources`.",
+  "plugins": [],
+  "plugin_paths": [],
+  "projects": [
+    {
+      "id": "morning-edition",
+      "title": "Morning Edition",
+      "type": "rss",
+      "max_age_hours": 30,
+      "max_articles": 30,
+      "feeds": [
+        {
+          "name": "World",
+          "url": "https://www.theguardian.com/world/rss",
+          "max_items": 6,
+          "full_text": true
+        },
+        {
+          "name": "NPR News",
+          "url": "https://feeds.npr.org/1001/rss.xml",
+          "max_items": 6,
+          "full_text": true
+        },
+        {
+          "name": "Science & Tech",
+          "url": "https://feeds.arstechnica.com/arstechnica/index",
+          "max_items": 5,
+          "full_text": true
+        },
+        {
+          "name": "Hacker News",
+          "url": "https://hnrss.org/best",
+          "max_items": 6,
+          "full_text": true
+        }
+      ]
+    },
+    {
+      "id": "wikipedia-daily",
+      "title": "Wikipedia Daily",
+      "type": "rss",
+      "max_age_hours": 30,
+      "feeds": [
+        {
+          "name": "Today's Featured Article",
+          "url": "https://en.wikipedia.org/w/api.php?action=featuredfeed&feed=featured&feedformat=atom",
+          "max_items": 1
+        },
+        {
+          "name": "On This Day",
+          "url": "https://en.wikipedia.org/w/api.php?action=featuredfeed&feed=onthisday&feedformat=atom",
+          "max_items": 1
+        }
+      ]
+    }
+  ],
+  "crosspoint": {
+    "_comment": "keep_days: delete our editions older than this from the reader (0 = never). backfill_days: also deliver missed editions this many days back.",
+    "host": "crosspoint.local",
+    "folder": "/Daily",
+    "keep_days": 7,
+    "backfill_days": 2,
+    "discover": true
+  },
+  "server": {
+    "_comment": "public_url is how the readers reach this machine (LAN IP). token is optional; if set, OPDS clients use it as the password.",
+    "enabled": true,
+    "bind": "0.0.0.0",
+    "port": 8787,
+    "public_url": "",
+    "token": ""
+  },
+  "koreader": {
+    "_comment": "copy_to: optional folder to copy editions into (Dropbox/Syncthing folder, mounted Kobo...). kosync: only used by the `kosync` command to check progress.",
+    "copy_to": "",
+    "keep_days": 7,
+    "kosync": {
+      "server": "https://sync.koreader.rocks",
+      "username": "",
+      "password": ""
+    }
+  },
+  "llm": {
+    "_comment": "Optional. Used by sources that summarize or explain (needs `pip install anthropic` and ANTHROPIC_API_KEY or `ant auth login`). provider: anthropic | none.",
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "low",
+    "max_tokens": 16000,
+    "fallbacks": true
+  }
+}

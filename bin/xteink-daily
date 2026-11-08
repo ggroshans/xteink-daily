@@ -1,0 +1,4 @@
+#!/bin/sh
+# Run xteink-daily from a checkout without installing anything.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m xteink_daily "$@"

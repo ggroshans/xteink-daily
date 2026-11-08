@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xteink-daily"
+version = "0.2.0"
+description = "Daily EPUB editions for CrossPoint Reader (Xteink X4/X3) and KOReader, with pluggable content sources."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = []
+keywords = ["crosspoint", "xteink", "koreader", "epub", "e-reader", "rss", "kosync"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Text Processing :: Markup :: HTML",
+]
+
+[project.optional-dependencies]
+llm = ["anthropic"]
+
+[project.scripts]
+xteink-daily = "xteink_daily.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["xteink_daily*"]
+
+[tool.setuptools.package-data]
+xteink_daily = ["config.example.json"]
+
+[project.urls]
+Homepage = "https://github.com/ggroshans/xteink-daily"
+Issues = "https://github.com/ggroshans/xteink-daily/issues"

@@ -1,170 +1,201 @@
 # xteink-daily
 
-Builds daily EPUB "editions" from feeds and delivers them to an Xteink X4 running
-[CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) and to a KOReader device,
-so reading progress syncs between the two through KOReader sync (KOSync).
+Fresh reading on your e-reader every morning. xteink-daily builds small daily EPUB "editions"
+(news digests, flashcards, whatever a content source produces) and delivers them to an Xteink
+X4/X3 running [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) and to
+any device running [KOReader](https://koreader.rocks). Reading progress then syncs between the two
+through KOReader sync (KOSync).
 
-Pure Python standard library (3.9+). Nothing to install.
+- **Zero dependencies:** Python 3.9+ standard library. Runs on a Mac, a Raspberry Pi or any Linux box.
+- **Hands-off delivery to CrossPoint:** pushes over the reader's web server whenever it's in File
+  Transfer mode, or (optionally) the reader pulls new editions by itself each time it goes to sleep.
+- **KOReader:** an OPDS catalog, or copies into a folder you already sync to the device.
+- **KOSync-safe:** every device gets the byte-identical file, so progress matches across devices.
+- **Pluggable content:** RSS/Atom built in. Anything else is a small plugin or a script in any
+  language. Optional LLM summaries via Claude.
 
 ```
-feeds ──► build (05:30 daily) ──► library/<project>/<Title>-<YYYY-MM-DD>.epub   (immutable)
-                                     │
-             ┌───────────────────────┼─────────────────────────────┐
-             ▼                       ▼                             ▼
-   push via CrossPoint web     sleep-pull plugin on the X4     OPDS feed / copy_to folder
-   server (/upload) whenever   (fetches on every sleep, no     for KOReader (and CrossPoint's
-   the X4 is in File Transfer  buttons; optional)              own OPDS browser)
+content sources ──► build (daily) ──► library/<project>/<Title>-<YYYY-MM-DD>.epub   (immutable)
+ rss, command,                          │
+ content packs          ┌───────────────┼──────────────────────────┐
+                        ▼               ▼                          ▼
+              push to CrossPoint   sleep-pull plugin         OPDS catalog / synced folder
+              (File Transfer mode)  on the reader (optional)  for KOReader
 ```
+
+## Install
+
+```sh
+git clone https://github.com/ggroshans/xteink-daily.git
+cd xteink-daily
+bin/xteink-daily init        # writes config.json next to the code
+```
+
+Or install the command: `pipx install git+https://github.com/ggroshans/xteink-daily` (then
+`xteink-daily init` writes `~/.config/xteink-daily/config.json`).
 
 ## Quick start
 
 ```sh
-cd ~/projects/xteink-daily
-bin/xteink-daily init          # writes config.json (already done here)
-bin/xteink-daily build         # builds today's editions now
-bin/xteink-daily status        # what exists and where it has been delivered
+bin/xteink-daily build       # build today's editions from the projects in config.json
+bin/xteink-daily status      # what exists and where it has been delivered
 ```
 
-Then, on the X4: **Home → File Transfer → Join Network**, and:
+On the reader, open **Home → File Transfer → Join Network**, then:
 
 ```sh
-bin/xteink-daily push          # finds the reader (crosspoint.local, cached IP, UDP discovery) and uploads
+bin/xteink-daily push        # finds the reader (crosspoint.local, cached IP, UDP discovery) and uploads
 ```
 
-To make it daily and hands-off, run the daemon at login:
+To run it every day without thinking about it, start the daemon. It builds at `build_time`,
+pushes when the reader shows up and serves the OPDS and sleep-pull endpoints.
 
 ```sh
-bin/xteink-daily launchd install   # builds at build_time, pushes when the X4 appears, serves OPDS + sleep-pull
-tail -f library/logs/daemon.log
+bin/xteink-daily launchd install    # macOS: runs at login; log in library/logs/daemon.log
+bin/xteink-daily systemd            # Linux: prints a systemd user unit with install steps
 ```
 
-## Getting editions onto the X4
+## Content
 
-The CrossPoint web server **only runs while the reader is in File Transfer mode**, so a pure
-"push" can only happen while you have that screen open. The daemon handles this by checking
-every minute (only while something is waiting) and uploading the moment the reader shows up.
-Editions you missed are back-filled (`backfill_days`). Editions you delete on the reader are not
-re-sent. Our own editions older than `keep_days` are pruned. Nothing else on the card is ever touched.
-
-**Optional, fully automatic:** the sleep-pull plugin. CrossPoint plugins can declare an HTTP
-download that runs when the reader goes to sleep. The firmware joins your saved Wi-Fi for a few
-seconds (only when battery ≥ 20%) and saves whatever this Mac returns. No File Transfer screen
-and no buttons.
-
-```sh
-bin/xteink-daily plugin --install  # while the X4 is in File Transfer mode (or copy build/xteink-daily/ to /.crosspoint/plugins/)
-```
-
-Then on the reader: **Settings → Connectivity → Plugins → Enabled** and restart it (event
-subscriptions load at boot). Notes:
-
-- Files arrive as `/Daily/Edition-<timestamp>.epub`. The firmware can't put a date in the file
-  name. Each edition still needs a unique name, because CrossPoint caches parsed books by path
-  and would show stale pages if a file were replaced in place.
-- Each sleep fetches at most one new edition. When there's nothing new the server answers `304`
-  and nothing is written.
-- Downloads are capped at 1 MB by the firmware. Text-only editions are ~60 KB, so this only
-  matters if you add a very large project.
-- The Mac must be awake and reachable at `server.public_url`. Give the Mac a DHCP reservation
-  so that IP doesn't change, or re-run `plugin --install` after it does.
-
-## KOReader sync between the two devices
-
-KOSync syncs **reading position, not files**. Each device needs its own copy of the book, and
-both must compute the same document ID. xteink-daily makes that work:
-
-- Every device gets the **byte-identical** file (the same EPUB is pushed, served and copied).
-- An edition is **never rebuilt once delivered** (`build --force` refuses), because changing
-  the bytes would change its ID.
-- `bin/xteink-daily hash <file>` prints both IDs KOReader/CrossPoint use, for checking.
-
-Set up both devices with the **same server and account**:
-
-| | CrossPoint (X4) | KOReader |
-|---|---|---|
-| Where | Settings → KOReader Sync | Tools (🔧) → Progress sync |
-| Server | `https://sync.koreader.rocks`, server type **KOSync** | default (sync.koreader.rocks) |
-| Account | same username/password (register once from either device) | same |
-| Matching | **Binary** | Document matching method → **Binary** |
-| When | Sync behavior **Smart**; set the Home button (or long-press) action to **Sync** for one-press sync while reading | enable **Auto sync** (pushes on close, pulls on open) |
-
-Daily flow: read on KOReader, close the book (progress uploads), pick up the X4, open the same
-edition, press **Sync**. Smart mode jumps to the furthest position without asking.
-
-`bin/xteink-daily kosync` (after filling `koreader.kosync` in config.json) shows which device
-last synced each recent edition and at what percentage, so you can confirm it's working.
-
-(CrossPoint's own default server, `sync.crosspointreader.com`, also works if you point
-KOReader's custom sync server at it. Use whichever you like, as long as it's the same on both.)
-
-## Getting editions onto the KOReader device
-
-KOReader has no push API, so pick one:
-
-1. **OPDS** (works everywhere): in KOReader, 🔍 → OPDS catalog → add
-   `http://<public_url>/opds` (for example `http://10.0.0.92:8787/opds`). New editions show at the top.
-   Tap one to download. If `server.token` is set, use it as the password (any username).
-   CrossPoint's own OPDS browser can use the same URL.
-2. **A synced folder:** set `koreader.copy_to` to a folder that already syncs to the device
-   (Syncthing, Dropbox, a mounted Kobo/Kindle). The daemon copies each new edition there and
-   prunes old ones.
-
-## Projects
-
-Each entry in `projects` produces one edition per day. Today there's one source type, `rss`
-(RSS 2.0, RSS 1.0 and Atom):
+Each entry in `projects` produces one edition per day, from the source named by `type`.
+`xteink-daily sources` lists every installed source type with its options.
 
 ```json
-{
-  "id": "tech",                    // lowercase, used for folders/URLs
-  "title": "Tech Digest",          // book title and file name: Tech-Digest-2026-11-08.epub
-  "type": "rss",
-  "max_age_hours": 30,             // ignore older items
-  "max_articles": 30,              // per edition
-  "feeds": [
-    {"name": "Ars", "url": "https://feeds.arstechnica.com/arstechnica/index", "max_items": 8, "full_text": true}
-  ]
-}
+"projects": [
+  {"id": "morning", "title": "Morning Edition", "type": "rss", "max_age_hours": 30,
+   "feeds": [{"name": "Ars Technica", "url": "https://feeds.arstechnica.com/arstechnica/index",
+              "max_items": 8, "full_text": true}]},
+  {"id": "quote", "title": "Daily Quote", "type": "command", "command": ["python3", "quote.py"]}
+]
 ```
 
-- Items are never repeated across editions. Days with nothing new produce no edition.
-- `full_text: true` fetches each article page and extracts the main text, for feeds that only
-  carry summaries. It falls back to the summary when extraction looks wrong (paywalls,
-  JavaScript-only pages).
-- Images are dropped to keep files small and reader-friendly.
+- Items never repeat across editions. Days with nothing new produce no edition.
+- **`rss`** handles RSS 2.0, RSS 1.0 and Atom. `full_text: true` fetches each article page and
+  extracts the main text, for summary-only feeds.
+- **`command`** runs any program that prints articles as JSON (see
+  [docs/writing-sources.md](docs/writing-sources.md#command-sources-any-language)).
+- **Content packs** add more types. [xteink-daily-content](https://github.com/ggroshans/xteink-daily-content)
+  has a summarized Hacker News digest, Jeopardy! flashcards and vocabulary flashcards. Clone it and
+  add to config.json:
+  ```json
+  "plugin_paths": ["../xteink-daily-content"],
+  "plugins": ["xteink_daily_content"]
+  ```
+  or `pip install` it, and its sources register themselves.
+- Items can have a **reveal page**: answers and definitions go on the next page, so you can quiz
+  yourself by turning the page.
 
-To add a new kind of content (weather, calendar, read-later, newsletters...), write a class with
-`collect(project, seen, now, log) -> list[Section]` in `xteink_daily/sources/` and register it
-in `SOURCES`. Building, delivery and sync all work unchanged.
+### LLM summaries (optional)
+
+Sources can ask for summaries and explanations. With the
+[Anthropic Python SDK](https://pypi.org/project/anthropic/) installed (`pip install anthropic`, or
+`pip install "xteink-daily[llm]"`) and credentials available (`ANTHROPIC_API_KEY` or
+`ant auth login`), they use Claude. Without it, sources fall back to non-LLM output (for example
+the article's opening sentences), so nothing breaks. Settings live in the `llm` section:
+
+```json
+"llm": {"provider": "anthropic", "model": "claude-opus-5-5", "effort": "low", "fallbacks": true}
+```
+
+Responses are cached, so rebuilding a day doesn't pay twice. `effort` trades depth against cost.
+`fallbacks` turns on Anthropic's server-side refusal fallback. Set `"provider": "none"` to turn
+LLM use off.
+
+### Writing a source
+
+A source is a class with `collect(ctx)` that returns sections of articles. The `ctx` handles
+HTTP, caching, article extraction, LLM calls, a daily-seeded random generator and "already
+used" tracking. Keep your sources in your own repo or package; the core never needs to change.
+See **[docs/writing-sources.md](docs/writing-sources.md)**.
+
+## Getting editions onto CrossPoint
+
+The CrossPoint web server only runs while the reader is in **File Transfer** mode. The daemon
+checks for the reader every minute while something is waiting, and uploads as soon as it
+appears. Missed editions are back-filled (`backfill_days`). Editions you delete on the reader
+are not re-sent. Editions older than `keep_days` are pruned, and only ones xteink-daily created.
+
+**Optional: fully automatic sleep-pull.** CrossPoint plugins can declare a download that runs
+when the reader goes to sleep. The reader joins your saved Wi-Fi for a few seconds (battery ≥ 20%)
+and fetches the next new edition from your xteink-daily machine. No File Transfer screen needed.
+
+```sh
+bin/xteink-daily plugin --install   # with the reader in File Transfer mode
+```
+
+Then on the reader: **Settings → Connectivity → Plugins → Enabled**, and restart it.
+
+- Files arrive as `/Daily/Edition-<timestamp>.epub`. Each needs a unique name because CrossPoint
+  caches parsed books by path.
+- One new edition per sleep. When there's nothing new, the server answers `304` and nothing is written.
+- The firmware caps these downloads at 1 MB. Text-only editions are typically 5–100 KB.
+- The machine running xteink-daily must be on and reachable at `server.public_url`. Use a DHCP
+  reservation so its address doesn't change.
+
+## KOReader sync between devices
+
+KOSync syncs **reading position, not files**: each device needs its own copy, and both must compute
+the same document ID. xteink-daily delivers byte-identical files and never rebuilds an edition once
+it has been delivered. `xteink-daily hash <file>` prints the IDs both readers use.
+
+Use the **same server and account** on both:
+
+| | CrossPoint | KOReader |
+|---|---|---|
+| Where | Settings → KOReader Sync | Tools → Progress sync |
+| Server | `https://sync.koreader.rocks`, server type **KOSync** | default |
+| Account | same username/password | same |
+| Matching | **Binary** | Document matching method → **Binary** |
+| Syncing | Sync behavior **Smart**; map the Home button (or long-press) to **Sync** | **Auto sync** on |
+
+Read on KOReader, close the book, open the same edition on the X4 and press **Sync**.
+`xteink-daily kosync` (with `koreader.kosync` credentials set) shows each edition's last synced
+device and position.
+
+## Getting editions onto KOReader
+
+KOReader has no push API. Pick one:
+
+1. **OPDS:** in KOReader, Search → OPDS catalog → add `http://<server.public_url>/opds`. New
+   editions appear at the top; tap to download. CrossPoint's OPDS browser can use the same URL.
+   If `server.token` is set, use it as the password.
+2. **A synced folder:** set `koreader.copy_to` to a folder that already syncs to the device
+   (Syncthing, Dropbox, a mounted Kobo/Kindle). New editions are copied in, old ones pruned.
 
 ## Commands
 
 | Command | |
 |---|---|
+| `init` | create a config.json |
 | `build [--project ID] [--force]` | build today's editions |
-| `push [--host IP] [--dry-run] [--resend FILE…] [--no-prune]` | upload to the X4 now |
+| `sources` | list source types, their options and the LLM status |
+| `push [--host IP] [--dry-run] [--resend FILE…] [--no-prune]` | upload to the reader now |
 | `status [--probe]` | editions, deliveries, reader reachability |
-| `run` | daemon: schedule + push-on-appear + server |
-| `serve` | server only (OPDS, files, sleep-pull) |
-| `plugin [--install]` | generate/install the sleep-pull plugin |
+| `run` / `serve` | daemon (schedule + push + server) / server only |
+| `plugin [--install]` | generate or install the sleep-pull plugin |
 | `hash FILE…` / `kosync [FILE…]` | KOSync document IDs / progress lookup |
-| `launchd install\|uninstall\|print` | run the daemon at login (macOS) |
-
-Tests: `python3 -m unittest discover -s tests -t .` (includes a fake CrossPoint web server).
+| `launchd install\|uninstall\|print` / `systemd` | run at login (macOS) / Linux unit |
 
 ## Troubleshooting
 
-- **Daemon can't reach the X4 but `push` from Terminal can:** macOS may require *Local Network*
-  permission for `python3` when it runs from launchd. Check System Settings → Privacy & Security →
-  Local Network.
 - **Reader not found:** mDNS (`crosspoint.local`) doesn't work on every network. Pass the IP shown
-  on the reader's screen with `--host`, or set `crosspoint.host`. Once found, its IP is remembered.
-- **macOS firewall prompt** for incoming connections when the server starts: allow it, or the
-  readers can't reach OPDS/sleep-pull.
-- **Plugin does nothing:** plugins must be enabled and the reader restarted after install. The
-  reader's clock must have been set once (its first Wi-Fi join does this). Battery must be ≥ 20%.
-# xteink-daily
-# xteink-daily
-# xteink-daily
-# xteink-daily
-# xteink-daily
+  on the reader with `--host`, or set `crosspoint.host`.
+- **macOS: the daemon can't reach the reader but Terminal can:** grant *Local Network* access to
+  `python3` (System Settings → Privacy & Security → Local Network). Allow incoming connections if
+  the firewall asks, or readers can't reach OPDS/sleep-pull.
+- **Sleep-pull does nothing:** plugins must be enabled and the reader restarted after install; its
+  clock must have been set once (any Wi-Fi join does it); battery must be ≥ 20%.
+- **HTTP 429 from Wikipedia or other APIs:** requests are retried with backoff. Setting `contact`
+  in config.json (a URL or email) adds it to the User-Agent, which some services require.
+
+## Development
+
+```sh
+python3 -m unittest discover -s tests -t .
+```
+
+The tests include a fake CrossPoint web server that follows the
+[documented endpoints](https://github.com/crosspoint-reader/crosspoint-reader/blob/develop/docs/webserver-endpoints.md).
+Not affiliated with Xteink, CrossPoint Reader or KOReader.
+
+MIT licensed.
