@@ -74,11 +74,11 @@ Each entry in `projects` produces one edition per day, from the source named by 
   extracts the main text, for summary-only feeds.
 - **`command`** runs any program that prints articles as JSON (see
   [docs/writing-sources.md](docs/writing-sources.md#command-sources-any-language)).
-- **Content packs** add more types. [xteink-daily-content](https://github.com/ggroshans/xteink-daily-content)
+- **Content packs** add more types. [xteink-content-daily](https://github.com/ggroshans/xteink-content-daily)
   has a summarized Hacker News digest, Jeopardy! flashcards and vocabulary flashcards. Clone it and
   add to config.json:
   ```json
-  "plugin_paths": ["../xteink-daily-content"],
+  "plugin_paths": ["../xteink-content-daily"],
   "plugins": ["xteink_daily_content"]
   ```
   or `pip install` it, and its sources register themselves.

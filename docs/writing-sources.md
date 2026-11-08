@@ -6,7 +6,7 @@ already used, delivery to CrossPoint and KOReader, and KOSync-safe files.
 
 Sources live outside this repository, in a content pack (a folder or package of your own), so
 adding ideas never touches the core. See
-[xteink-daily-content](https://github.com/ggroshans/xteink-daily-content) for working examples.
+[xteink-content-daily](https://github.com/ggroshans/xteink-content-daily) for working examples.
 
 There are two ways to write one:
 
